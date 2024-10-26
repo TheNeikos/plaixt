@@ -1,8 +1,14 @@
-[package]
-name = "plaixt"
+[workspace]
+members = [
+    "crates/*"
+]
+resolver = "2"
+
+[workspace.package]
 version = "0.0.0"
 edition = "2021"
 description = "PLAIn teXT tools for your data"
 license = "EUPL-1.2"
 
-[dependencies]
+[workspace.metadata.crane]
+name = "plaixt"

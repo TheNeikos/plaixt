@@ -5,3 +5,7 @@ version = 3
 [[package]]
 name = "plaixt"
 version = "0.0.0"
+
+[[package]]
+name = "plaixt-core"
+version = "0.0.0"
