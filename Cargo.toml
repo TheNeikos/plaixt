@@ -1,6 +1,8 @@
 [package]
 name = "plaixt"
-version = "0.1.0"
+version = "0.0.0"
 edition = "2021"
+description = "PLAIn teXT tools for your data"
+license = "EUPL-1.2"
 
 [dependencies]
