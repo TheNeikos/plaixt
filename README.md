@@ -193,3 +193,23 @@ One could simply enter the ID of the document there, and the module only checks
 for existence.
 The possibilities here are unbounded, and allow you to custom fit your
 interactions with your needs.
+
+# Contributing
+
+This project is currently incubating, and as such there is not much to
+contribute to.
+Nontheless, if you feel like this project speaks to you specifically, and you
+want to participate, you can always open an issue or talk to me on other
+platforms.
+
+# License
+
+The plaixt code is licensed under the EUPL-1.2 or later.
+Any other documents, not covered by the EUPL-1.2 or later licenses, are licensed under CC-BY-SA 4.0.
+
+To make it simple, do what you want privately, but if you share it with others,
+or allow them to use it, make sure that they know of their rights.
+
+-------
+
+<p xmlns:cc="http://creativecommons.org/ns#" xmlns:dct="http://purl.org/dc/terms/"><span property="dct:title">Plaixt</span> by <span property="cc:attributionName">Marcel Müller</span> is licensed under <a href="https://creativecommons.org/licenses/by-sa/4.0/?ref=chooser-v1" target="_blank" rel="license noopener noreferrer" style="display:inline-block;">CC BY-SA 4.0<img style="height:22px!important;margin-left:3px;vertical-align:text-bottom;" src="https://mirrors.creativecommons.org/presskit/icons/cc.svg?ref=chooser-v1" alt=""><img style="height:22px!important;margin-left:3px;vertical-align:text-bottom;" src="https://mirrors.creativecommons.org/presskit/icons/by.svg?ref=chooser-v1" alt=""><img style="height:22px!important;margin-left:3px;vertical-align:text-bottom;" src="https://mirrors.creativecommons.org/presskit/icons/sa.svg?ref=chooser-v1" alt=""></a></p>
