@@ -1,0 +1,5 @@
+# Direnv
+.direnv
+
+# Cargo/Rust stuff
+/target
