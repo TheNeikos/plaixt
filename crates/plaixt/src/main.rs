@@ -30,15 +30,145 @@ async fn main() -> miette::Result<()> {
 
     let definitions = load_definitions(args.path.join("definitions")).await?;
 
-    info!(?definitions, "Got definitions!");
+    let records = load_records(args.path, &definitions).await?;
+
+    info!(?records, "Got");
 
     Ok(())
+}
+
+#[derive(Debug)]
+pub struct Record {
+    kind: String,
+    at: OffsetDateTime,
+    fields: BTreeMap<String, KdlValue>,
+}
+
+fn parse_record(
+    bytes: &str,
+    definitions: &BTreeMap<String, Vec<Definition>>,
+) -> miette::Result<Vec<Record>> {
+    let doc: KdlDocument = bytes.parse()?;
+
+    let mut recs = vec![];
+
+    for node in doc.nodes() {
+        let Some(def) = definitions.get(node.name().value()) else {
+            return Err(miette::diagnostic!(
+                labels = vec![LabeledSpan::new_primary_with_span(None, node.name().span())],
+                "Unknown record kind"
+            ))?;
+        };
+
+        let Some(at_entry) = node.entry(0) else {
+            return Err(miette::diagnostic!(
+                labels = vec![LabeledSpan::new_primary_with_span(None, node.name().span())],
+                "Every record has to have a first argument with a datetime formatted as RFC3339."
+            ))?;
+        };
+
+        let KdlValue::String(at) = at_entry.value() else {
+            return Err(miette::diagnostic!(
+                labels = vec![LabeledSpan::new_primary_with_span(None, at_entry.span())],
+                "This datetime should be a string formatted as RFC3339."
+            ))?;
+        };
+
+        let Ok(at) = OffsetDateTime::parse(at, &time::format_description::well_known::Rfc3339)
+        else {
+            return Err(miette::diagnostic!(
+                labels = vec![LabeledSpan::new_primary_with_span(None, at_entry.span())],
+                "This datetime should be a string formatted as RFC3339."
+            ))?;
+        };
+
+        let fields = node
+            .iter_children()
+            .map(|field| {
+                let Some(get) = field.get(0) else {
+                    return Err(miette::diagnostic!(
+                        labels = vec![LabeledSpan::new_primary_with_span(None, at_entry.span())],
+                        "This datetime should be a string formatted as RFC3339."
+                    ))?;
+                };
+                Ok::<_, miette::Report>((field.name().clone(), get.clone()))
+            })
+            .map(|val| match val {
+                Ok((name, val)) => {
+                    let matching_def =
+                        &def[def.partition_point(|v| v.since > at).saturating_sub(1)];
+
+                    let kind = &matching_def.fields[name.value()];
+
+                    if !kind.is_valid(&val) {
+                        return Err(miette::diagnostic!(
+                            labels = vec![LabeledSpan::new_primary_with_span(None, name.span())],
+                            "This field has the wrong kind."
+                        ))?;
+                    }
+
+                    Ok((name.to_string(), val))
+                }
+                Err(err) => Err(err),
+            })
+            .collect::<Result<_, _>>()?;
+
+        recs.push(Record {
+            kind: node.name().to_string(),
+            at,
+            fields,
+        });
+    }
+
+    Ok(recs)
+}
+
+async fn load_records(
+    path: Utf8PathBuf,
+    definitions: &BTreeMap<String, Vec<Definition>>,
+) -> miette::Result<Vec<Record>> {
+    let defs = ReadDirStream::new(tokio::fs::read_dir(path).await.into_diagnostic()?)
+        .map_err(miette::Report::from_err)
+        .and_then(|entry| async move {
+            if entry.file_type().await.into_diagnostic()?.is_file() {
+                Ok(Some((
+                    Utf8PathBuf::from_path_buf(entry.path().to_path_buf()).unwrap(),
+                    tokio::fs::read_to_string(entry.path())
+                        .await
+                        .into_diagnostic()?,
+                )))
+            } else {
+                Ok(None)
+            }
+        })
+        .flat_map(|val| futures::stream::iter(val.transpose()))
+        .and_then(|(name, bytes)| async move {
+            Ok(parse_record(&bytes, definitions).map_err(|e| {
+                e.with_source_code(NamedSource::new(name, bytes).with_language("kdl"))
+            })?)
+        })
+        .map(|val| val.map(|recs| futures::stream::iter(recs).map(Ok::<_, miette::Report>)))
+        .try_flatten()
+        .try_collect()
+        .await?;
+
+    Ok(defs)
 }
 
 #[derive(Debug)]
 pub enum DefinitionKind {
     String,
     OneOf(Vec<String>),
+}
+impl DefinitionKind {
+    fn is_valid(&self, val: &KdlValue) -> bool {
+        match self {
+            DefinitionKind::String => val.is_string(),
+            DefinitionKind::OneOf(options) => val
+                .as_string()
+                .is_some_and(|val| options.iter().any(|o| o == val)),
+        }
+    }
 }
 
 impl TryFrom<&str> for DefinitionKind {
@@ -174,6 +304,8 @@ fn parse_definition(bytes: &str) -> miette::Result<Vec<Definition>> {
             }
         }
     }
+
+    defs.sort_by_key(|d| d.since);
 
     Ok(defs)
 }

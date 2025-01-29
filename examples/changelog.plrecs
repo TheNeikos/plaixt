@@ -1,0 +1,6 @@
+
+changelog "2025-01-29 21:17:50+01:00" {
+	title "Added parsing of plaixt definitions"
+	version "0.1.0"
+	kind "Feature"
+}
