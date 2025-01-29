@@ -1,0 +1,23 @@
+[package]
+name = "plaixt"
+version.workspace = true
+edition.workspace = true
+description.workspace = true
+license.workspace = true
+
+[dependencies]
+camino = { version = "1.1.9", features = ["serde", "serde1"] }
+clap = { version = "4.5.27", features = ["derive"] }
+futures = "0.3.31"
+kdl.workspace = true
+miette = { version = "7.4.0", features = ["fancy", "syntect-highlighter"] }
+owo-colors = "4.1.0"
+time = { version = "0.3.37", features = ["macros", "parsing", "serde-well-known"] }
+tokio = { version = "1.43.0", features = ["full"] }
+tokio-stream = { version = "0.1.17", features = ["full"] }
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+
+[lints]
+workspace = true
+
