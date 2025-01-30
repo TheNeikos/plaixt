@@ -6,13 +6,14 @@ use camino::Utf8PathBuf;
 use clap::Parser;
 use futures::StreamExt;
 use futures::TryStreamExt;
+use jiff::fmt::temporal::DateTimeParser;
+use jiff::Timestamp;
 use kdl::KdlDocument;
 use kdl::KdlValue;
 use miette::IntoDiagnostic;
 use miette::LabeledSpan;
 use miette::NamedSource;
 use owo_colors::OwoColorize;
-use time::OffsetDateTime;
 use tokio_stream::wrappers::ReadDirStream;
 use tracing::info;
 
@@ -40,8 +41,26 @@ async fn main() -> miette::Result<()> {
 #[derive(Debug)]
 pub struct Record {
     kind: String,
-    at: OffsetDateTime,
+    at: Timestamp,
     fields: BTreeMap<String, KdlValue>,
+}
+
+fn parse_timestamp(value: &str) -> miette::Result<Timestamp> {
+    let parser = DateTimeParser::new();
+
+    parser
+        .parse_timestamp(value)
+        .or_else(|_| {
+            parser
+                .parse_datetime(value)
+                .and_then(|date| date.in_tz("UTC").map(|z| z.timestamp()))
+        })
+        .or_else(|_| {
+            parser
+                .parse_date(value)
+                .and_then(|date| date.in_tz("UTC").map(|z| z.timestamp()))
+        })
+        .into_diagnostic()
 }
 
 fn parse_record(
@@ -74,8 +93,7 @@ fn parse_record(
             ))?;
         };
 
-        let Ok(at) = OffsetDateTime::parse(at, &time::format_description::well_known::Rfc3339)
-        else {
+        let Ok(at) = parse_timestamp(at) else {
             return Err(miette::diagnostic!(
                 labels = vec![LabeledSpan::new_primary_with_span(None, at_entry.span())],
                 "This datetime should be a string formatted as RFC3339."
@@ -100,9 +118,13 @@ fn parse_record(
 
                     let kind = &matching_def.fields[name.value()];
 
-                    if !kind.is_valid(&val) {
-                        return Err(miette::diagnostic!(
-                            labels = vec![LabeledSpan::new_primary_with_span(None, name.span())],
+                    if let Err(e) = kind.validate(&val) {
+                        Err(miette::diagnostic!(
+                            labels = vec![LabeledSpan::new_primary_with_span(
+                                Some(String::from("here")),
+                                name.span()
+                            )],
+                            help = e,
                             "This field has the wrong kind."
                         ))?;
                     }
@@ -143,9 +165,8 @@ async fn load_records(
         })
         .flat_map(|val| futures::stream::iter(val.transpose()))
         .and_then(|(name, bytes)| async move {
-            Ok(parse_record(&bytes, definitions).map_err(|e| {
-                e.with_source_code(NamedSource::new(name, bytes).with_language("kdl"))
-            })?)
+            parse_record(&bytes, definitions)
+                .map_err(|e| e.with_source_code(NamedSource::new(name, bytes).with_language("kdl")))
         })
         .map(|val| val.map(|recs| futures::stream::iter(recs).map(Ok::<_, miette::Report>)))
         .try_flatten()
@@ -161,12 +182,17 @@ pub enum DefinitionKind {
     OneOf(Vec<String>),
 }
 impl DefinitionKind {
-    fn is_valid(&self, val: &KdlValue) -> bool {
+    fn validate(&self, val: &KdlValue) -> Result<(), String> {
         match self {
-            DefinitionKind::String => val.is_string(),
+            DefinitionKind::String => val
+                .is_string()
+                .then_some(())
+                .ok_or("Expected a string here".to_string()),
             DefinitionKind::OneOf(options) => val
                 .as_string()
-                .is_some_and(|val| options.iter().any(|o| o == val)),
+                .is_some_and(|val| options.iter().any(|o| o == val))
+                .then_some(())
+                .ok_or_else(|| format!("Expected one of: {}", options.join(", "))),
         }
     }
 }
@@ -183,7 +209,7 @@ impl TryFrom<&str> for DefinitionKind {
 
 #[derive(Debug)]
 pub struct Definition {
-    since: OffsetDateTime,
+    since: Timestamp,
     fields: HashMap<String, DefinitionKind>,
 }
 
@@ -215,10 +241,7 @@ fn parse_definition(bytes: &str) -> miette::Result<Vec<Definition>> {
                     ))?;
                 };
 
-                let since = match OffsetDateTime::parse(
-                    since,
-                    &time::format_description::well_known::Rfc3339,
-                ) {
+                let since = match parse_timestamp(since) {
                     Ok(since) => since,
                     Err(_err) => {
                         return Err(miette::diagnostic!(
