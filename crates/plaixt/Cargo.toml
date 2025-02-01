@@ -9,6 +9,7 @@ license.workspace = true
 camino = { version = "1.1.9", features = ["serde", "serde1"] }
 clap = { version = "4.5.27", features = ["derive"] }
 futures = "0.3.31"
+human-panic = "2.0.2"
 jiff = "0.1.28"
 kdl.workspace = true
 miette = { version = "7.4.0", features = ["fancy", "syntect-highlighter"] }
