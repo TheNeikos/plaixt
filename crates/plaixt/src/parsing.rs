@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 
+use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use futures::StreamExt;
 use futures::TryStreamExt;
@@ -123,7 +124,7 @@ pub(crate) fn parse_record(
 }
 
 pub(crate) async fn load_records(
-    path: Utf8PathBuf,
+    path: &Utf8Path,
     definitions: &BTreeMap<String, Vec<Definition>>,
 ) -> miette::Result<Vec<Record>> {
     let defs = ReadDirStream::new(tokio::fs::read_dir(path).await.into_diagnostic()?)
@@ -313,7 +314,7 @@ pub(crate) fn parse_definition(bytes: &str) -> miette::Result<Vec<Definition>> {
 }
 
 pub(crate) async fn load_definitions(
-    path: Utf8PathBuf,
+    path: &Utf8Path,
 ) -> miette::Result<BTreeMap<String, Vec<Definition>>> {
     let defs = ReadDirStream::new(tokio::fs::read_dir(path).await.into_diagnostic()?)
         .map_err(miette::Report::from_err)
