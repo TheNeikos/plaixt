@@ -9,3 +9,9 @@ changelog "2025-01-30 09:10:59+01:00" {
 	version "0.1.0"
 	kind "Feature"
 }
+
+changelog "2025-02-01" {
+	title "Added CLI options"
+	version "0.1.0"
+	kind "Feature"
+}
