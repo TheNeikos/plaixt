@@ -15,7 +15,7 @@ use miette::NamedSource;
 use owo_colors::OwoColorize;
 use tokio_stream::wrappers::ReadDirStream;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Record {
     pub(crate) kind: String,
     pub(crate) at: Timestamp,
@@ -82,8 +82,7 @@ pub(crate) fn parse_record(
             .map(|field| {
                 let Some(get) = field.get(0) else {
                     return Err(miette::diagnostic!(
-                        labels =
-                            vec![LabeledSpan::new_primary_with_span(None, at_entry.span())],
+                        labels = vec![LabeledSpan::new_primary_with_span(None, at_entry.span())],
                         "This datetime should be a string formatted as RFC3339."
                     ))?;
                 };
@@ -143,9 +142,8 @@ pub(crate) async fn load_records(
         })
         .flat_map(|val| futures::stream::iter(val.transpose()))
         .and_then(|(name, bytes)| async move {
-            parse_record(&bytes, definitions).map_err(|e| {
-                e.with_source_code(NamedSource::new(name, bytes).with_language("kdl"))
-            })
+            parse_record(&bytes, definitions)
+                .map_err(|e| e.with_source_code(NamedSource::new(name, bytes).with_language("kdl")))
         })
         .map(|val| val.map(|recs| futures::stream::iter(recs).map(Ok::<_, miette::Report>)))
         .try_flatten()
@@ -344,4 +342,3 @@ pub(crate) async fn load_definitions(
 
     Ok(defs)
 }
-
