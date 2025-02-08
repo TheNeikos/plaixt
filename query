@@ -1,6 +1,6 @@
 {
-    RecordsAll {
-        ... on changelog {
+    Plaixt__RecordsAll {
+        ... on Plaixt__changelog {
             at @output
             kind @output
             fields {

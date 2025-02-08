@@ -75,8 +75,10 @@ async fn main() -> miette::Result<()> {
 
             let result = execute_query(
                 &schema,
-                Arc::new(trustfall_plaixt::PlaixtAdapter {
-                    records: records.clone(),
+                Arc::new(trustfall_plaixt::TrustfallMultiAdapter {
+                    plaixt: trustfall_plaixt::PlaixtAdapter {
+                        records: records.clone(),
+                    },
                 }),
                 &query,
                 BTreeMap::<Arc<str>, FieldValue>::from([("search".into(), "trust".into())]),

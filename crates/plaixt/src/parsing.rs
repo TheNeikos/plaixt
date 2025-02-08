@@ -194,11 +194,15 @@ impl TryFrom<&str> for DefinitionKind {
 
 #[derive(Debug)]
 pub struct Definition {
+    pub(crate) name: String,
     pub(crate) since: Timestamp,
     pub(crate) fields: HashMap<String, DefinitionKind>,
 }
 
-pub(crate) fn parse_definition(bytes: &str) -> miette::Result<Vec<Definition>> {
+pub(crate) fn parse_definition(
+    bytes: &str,
+    definition_name: String,
+) -> miette::Result<Vec<Definition>> {
     let doc: KdlDocument = bytes.parse()?;
 
     let mut defs = vec![];
@@ -309,7 +313,11 @@ pub(crate) fn parse_definition(bytes: &str) -> miette::Result<Vec<Definition>> {
                     })
                     .collect::<miette::Result<_>>()?;
 
-                defs.push(Definition { since, fields });
+                defs.push(Definition {
+                    since,
+                    fields,
+                    name: definition_name.clone(),
+                });
             }
             unknown => {
                 return Err(miette::diagnostic!(
@@ -349,9 +357,10 @@ pub(crate) async fn load_definitions(
         })
         .flat_map(|val| futures::stream::iter(val.transpose()))
         .and_then(|(name, bytes)| async move {
+            let definition_name = name.file_stem().unwrap().to_string();
             Ok((
-                name.file_stem().unwrap().to_string(),
-                parse_definition(&bytes).map_err(|e| {
+                definition_name.clone(),
+                parse_definition(&bytes, definition_name).map_err(|e| {
                     e.with_source_code(NamedSource::new(name, bytes).with_language("kdl"))
                 })?,
             ))
