@@ -1,23 +1,23 @@
 changelog "2025-01-29" {
 	title "Added parsing of plaixt definitions"
 	version "0.1.0"
-	kind "Feature"
+	type "Feature"
 }
 
 changelog "2025-01-30 09:10:59+01:00" {
 	title "Added parsing of plaixt records"
 	version "0.1.0"
-	kind "Feature"
+	type "Feature"
 }
 
 changelog "2025-02-01" {
 	title "Added CLI options"
 	version "0.1.0"
-	kind "Feature"
+	type "Feature"
 }
 
 changelog "2025-02-07" {
 	title "Added trustfall as a query frontend"
 	version "0.1.0"
-	kind "Feature"
+	type "Feature"
 }

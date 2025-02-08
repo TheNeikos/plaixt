@@ -4,6 +4,6 @@ define since="2025-01-29 20:27:30+01:00" {
     fields {
         title is=string
         version is=string
-        kind { oneOf "Bugfix" "Feature" "Chore" }
+        type { oneOf "Bugfix" "Feature" "Chore" }
     }
 }

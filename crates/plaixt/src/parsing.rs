@@ -160,6 +160,13 @@ pub enum DefinitionKind {
 }
 
 impl DefinitionKind {
+    pub(crate) fn trustfall_kind(&self) -> String {
+        match self {
+            DefinitionKind::String => String::from("String"),
+            DefinitionKind::OneOf(_vecs) => String::from("String"),
+        }
+    }
+
     pub(crate) fn validate(&self, val: &KdlValue) -> Result<(), String> {
         match self {
             DefinitionKind::String => val
@@ -285,6 +292,18 @@ pub(crate) fn parse_definition(bytes: &str) -> miette::Result<Vec<Definition>> {
                                 ))?;
                             }
                         };
+
+                        match field.name().value() {
+                            "at" | "kind" => return Err(miette::diagnostic!(
+                                    labels = vec![LabeledSpan::new_primary_with_span(
+                                        Some(String::from("this name")),
+                                        field.name().span()
+                                    )],
+                                    help = "Both `at` and `kind` are reserved field names.",
+                                    "Reserved field name."
+                                    ))?,
+                            _ => {}
+                        }
 
                         Ok((field.name().to_string(), kind))
                     })

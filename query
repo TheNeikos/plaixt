@@ -1,0 +1,13 @@
+{
+    RecordsAll {
+        ... on changelog {
+            at @output
+            kind @output
+            fields {
+                title @output @filter(op: "has_substring", value: ["$search"])
+                version @output
+                type @output
+            }
+        }
+    }
+}
