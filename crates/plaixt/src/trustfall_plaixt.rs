@@ -254,7 +254,7 @@ impl<'v> Adapter<'v> for TrustfallMultiAdapter {
                         contexts
                             .clone()
                             .into_iter()
-                            .map(|v| v.map(&mut |v: V| v.into_vertex().unwrap())),
+                            .map(|v| v.flat_map(&mut |v: V| v.into_vertex())),
                     ),
                     &Arc::from(type_name),
                     property_name,
@@ -295,7 +295,7 @@ impl<'v> Adapter<'v> for TrustfallMultiAdapter {
                         contexts
                             .clone()
                             .into_iter()
-                            .map(|v| v.map(&mut |v: V| v.into_vertex().unwrap())),
+                            .map(|v| v.flat_map(&mut |v: V| v.into_vertex())),
                     ),
                     &Arc::from(type_name),
                     edge_name,
@@ -338,7 +338,7 @@ impl<'v> Adapter<'v> for TrustfallMultiAdapter {
                         contexts
                             .clone()
                             .into_iter()
-                            .map(|v| v.map(&mut |v: V| v.into_vertex().unwrap())),
+                            .map(|v| v.flat_map(&mut |v: V| v.into_vertex())),
                     ),
                     type_name,
                     &Arc::from(coerce_to_type),
