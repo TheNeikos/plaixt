@@ -15,6 +15,8 @@ use miette::NamedSource;
 use owo_colors::OwoColorize;
 use tokio_stream::wrappers::ReadDirStream;
 
+use crate::trustfall_plaixt::ADAPTER_SEP;
+
 #[derive(Debug, Clone)]
 pub struct Record {
     pub(crate) kind: String,
@@ -156,6 +158,7 @@ pub(crate) async fn load_records(
 #[derive(Debug)]
 pub enum DefinitionKind {
     String,
+    Path,
     OneOf(Vec<String>),
 }
 
@@ -163,6 +166,7 @@ impl DefinitionKind {
     pub(crate) fn trustfall_kind(&self) -> String {
         match self {
             DefinitionKind::String => String::from("String"),
+            DefinitionKind::Path => format!("fs{ADAPTER_SEP}Path"),
             DefinitionKind::OneOf(_vecs) => String::from("String"),
         }
     }
@@ -173,6 +177,10 @@ impl DefinitionKind {
                 .is_string()
                 .then_some(())
                 .ok_or("Expected a string here".to_string()),
+            DefinitionKind::Path => val
+                .is_string()
+                .then_some(())
+                .ok_or("Expected a path encoded as a string here".to_string()),
             DefinitionKind::OneOf(options) => val
                 .as_string()
                 .is_some_and(|val| options.iter().any(|o| o == val))
@@ -187,6 +195,7 @@ impl TryFrom<&str> for DefinitionKind {
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         match value.to_ascii_lowercase().as_str() {
             "string" => Ok(DefinitionKind::String),
+            "path" => Ok(DefinitionKind::Path),
             other => miette::bail!("Did not recognize valid field kind: \"{other}\""),
         }
     }

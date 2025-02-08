@@ -8,6 +8,7 @@ license.workspace = true
 [dependencies]
 camino = { version = "1.1.9", features = ["serde", "serde1"] }
 clap = { version = "4.5.27", features = ["derive"] }
+filesystem-trustfall-adapter = { version = "0.1.1", path = "../../../trustfall-adapters-zimbopro/filesystem-trustfall-adapter" }
 futures = "0.3.31"
 human-panic = "2.0.2"
 jiff = "0.1.28"

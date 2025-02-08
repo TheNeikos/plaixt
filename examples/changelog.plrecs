@@ -21,3 +21,7 @@ changelog "2025-02-07" {
 	version "0.1.0"
 	type "Feature"
 }
+
+file_test "2025-02-08" {
+	path "Cargo.toml"
+}

@@ -1,13 +1,27 @@
 {
     Plaixt__RecordsAll {
-        ... on Plaixt__changelog {
+        ... on Plaixt__file_test {
             at @output
             kind @output
             fields {
-                title @output @filter(op: "has_substring", value: ["$search"])
-                version @output
-                type @output
+                path {
+                    ... on fs__File {
+                        size @output
+                    }
+                }
             }
         }
     }
+
+    # fs__Path(path: "./crates/plaixt/") {
+    #     ... on fs__Folder {
+    #         directory: path @output
+    #         children @fold {
+    #             ... on fs__File {
+    #                 file: path @output
+    #                 size @output
+    #             }
+    #         }
+    #     }
+    # }
 }

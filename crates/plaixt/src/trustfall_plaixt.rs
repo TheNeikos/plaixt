@@ -19,7 +19,7 @@ use trustfall::Schema;
 use crate::parsing::Definition;
 use crate::parsing::Record;
 
-const ADAPTER_SEP: &str = "__";
+pub(crate) const ADAPTER_SEP: &str = "__";
 
 #[derive(Debug, Default)]
 pub struct StartingVertex {
@@ -155,10 +155,27 @@ pub(crate) fn to_schema(definitions: &BTreeMap<String, Vec<Definition>>) -> Sche
         {}
         type RootSchemaQuery {{
             {roots}
+            fs{ADAPTER_SEP}Path(path: String!): fs{ADAPTER_SEP}Path!,
         }}
         interface Record {{
             at: String!,
             kind: String!,
+        }}
+
+        interface fs{ADAPTER_SEP}Path {{
+            path: String!
+        }}
+
+        type fs{ADAPTER_SEP}Folder implements fs{ADAPTER_SEP}Path {{
+            path: String!
+            children: [fs{ADAPTER_SEP}Path!]
+        }}
+
+        type fs{ADAPTER_SEP}File implements fs{ADAPTER_SEP}Path {{
+            path: String!
+            size: Int!
+            extension: String!
+            Hash: String!
         }}
 
         {types}
@@ -179,11 +196,23 @@ pub(crate) fn to_schema(definitions: &BTreeMap<String, Vec<Definition>>) -> Sche
 
 pub struct TrustfallMultiAdapter {
     pub plaixt: PlaixtAdapter,
+    pub filesystem: filesystem_trustfall_adapter::FileSystemAdapter,
 }
 
 #[derive(Debug, Clone)]
 pub enum TrustfallMultiVertex {
     Plaixt(PlaixtVertex),
+    Filesystem(filesystem_trustfall_adapter::vertex::Vertex),
+}
+
+impl AsVertex<filesystem_trustfall_adapter::vertex::Vertex> for TrustfallMultiVertex {
+    fn as_vertex(&self) -> Option<&filesystem_trustfall_adapter::vertex::Vertex> {
+        self.as_filesystem()
+    }
+
+    fn into_vertex(self) -> Option<filesystem_trustfall_adapter::vertex::Vertex> {
+        self.as_filesystem().cloned()
+    }
 }
 
 impl AsVertex<PlaixtVertex> for TrustfallMultiVertex {
@@ -204,6 +233,20 @@ impl TrustfallMultiVertex {
             None
         }
     }
+
+    pub fn as_filesystem(
+        &self,
+    ) -> Option<
+        &<filesystem_trustfall_adapter::FileSystemAdapter as trustfall::provider::Adapter<
+            'static,
+        >>::Vertex,
+    > {
+        if let Self::Filesystem(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
 }
 
 impl<'v> Adapter<'v> for TrustfallMultiAdapter {
@@ -217,7 +260,11 @@ impl<'v> Adapter<'v> for TrustfallMultiAdapter {
     ) -> trustfall::provider::VertexIterator<'v, Self::Vertex> {
         let (adapter_name, edge_name) = edge_name.split_once(ADAPTER_SEP).unwrap();
 
-        trace!(?adapter_name, ?edge_name, "Got start vertex");
+        trace!(
+            ?adapter_name,
+            ?edge_name,
+            "resolving top-level starting vertex"
+        );
 
         match adapter_name {
             "Plaixt" => {
@@ -228,6 +275,18 @@ impl<'v> Adapter<'v> for TrustfallMultiAdapter {
                 );
 
                 Box::new(iter.map(TrustfallMultiVertex::Plaixt))
+            }
+            "fs" => {
+                let iter = self.filesystem.resolve_starting_vertices(
+                    &Arc::from(edge_name),
+                    parameters,
+                    resolve_info,
+                );
+
+                Box::new(
+                    iter.inspect(|v| trace!(?v, "Got vertex"))
+                        .map(TrustfallMultiVertex::Filesystem),
+                )
             }
             _ => unreachable!(),
         }
@@ -243,7 +302,10 @@ impl<'v> Adapter<'v> for TrustfallMultiAdapter {
     where
         V: trustfall::provider::AsVertex<Self::Vertex> + 'v,
     {
-        let (adapter_name, type_name) = type_name.split_once(ADAPTER_SEP).unwrap();
+        trace!(?type_name, ?property_name, "resolving top-level property");
+        let (adapter_name, type_name) = type_name
+            .split_once(ADAPTER_SEP)
+            .unwrap_or(("Plaixt", type_name));
 
         match adapter_name {
             "Plaixt" => {
@@ -255,6 +317,29 @@ impl<'v> Adapter<'v> for TrustfallMultiAdapter {
                             .clone()
                             .into_iter()
                             .map(|v| v.flat_map(&mut |v: V| v.into_vertex())),
+                    ),
+                    &Arc::from(type_name),
+                    property_name,
+                    resolve_info,
+                );
+
+                Box::new(
+                    properties
+                        .into_iter()
+                        .zip(contexts)
+                        .map(|((_ctx, name), og_ctx)| (og_ctx, name)),
+                )
+            }
+            "fs" => {
+                let contexts = contexts.collect::<Vec<_>>();
+
+                let properties = self.filesystem.resolve_property(
+                    Box::new(
+                        contexts
+                            .clone()
+                            .into_iter()
+                            .map(|v| v.flat_map(&mut |v: V| v.into_vertex()))
+                            .inspect(|v| trace!(?v, "Got vertex")),
                     ),
                     &Arc::from(type_name),
                     property_name,
@@ -284,6 +369,7 @@ impl<'v> Adapter<'v> for TrustfallMultiAdapter {
         V,
         trustfall::provider::VertexIterator<'v, Self::Vertex>,
     > {
+        trace!(?type_name, ?edge_name, "Resolving top-level neighbor");
         let (adapter_name, type_name) = type_name.split_once(ADAPTER_SEP).unwrap();
 
         match adapter_name {
@@ -315,6 +401,37 @@ impl<'v> Adapter<'v> for TrustfallMultiAdapter {
                         }),
                 )
             }
+            "fs" => {
+                let contexts = contexts.collect::<Vec<_>>();
+
+                let properties = self.filesystem.resolve_neighbors(
+                    Box::new(
+                        contexts
+                            .clone()
+                            .into_iter()
+                            .map(|v| v.flat_map(&mut |v: V| v.into_vertex())),
+                    ),
+                    &Arc::from(type_name),
+                    edge_name,
+                    parameters,
+                    resolve_info,
+                );
+
+                Box::new(
+                    properties
+                        .into_iter()
+                        .zip(contexts)
+                        .map(|((_ctx, vals), og_ctx)| {
+                            (
+                                og_ctx,
+                                Box::new(
+                                    vals.inspect(|v| trace!(?v, "Got vertex"))
+                                        .map(TrustfallMultiVertex::Filesystem),
+                                ) as Box<_>,
+                            )
+                        }),
+                )
+            }
             _ => unreachable!(),
         }
     }
@@ -326,7 +443,7 @@ impl<'v> Adapter<'v> for TrustfallMultiAdapter {
         coerce_to_type: &Arc<str>,
         resolve_info: &trustfall::provider::ResolveInfo,
     ) -> trustfall::provider::ContextOutcomeIterator<'v, V, bool> {
-        trace!(?type_name, ?coerce_to_type, "Trying to coerce");
+        trace!(?type_name, ?coerce_to_type, "Top-level coerce");
         let (adapter_name, coerce_to_type) = coerce_to_type.split_once(ADAPTER_SEP).unwrap();
 
         match adapter_name {
@@ -351,6 +468,30 @@ impl<'v> Adapter<'v> for TrustfallMultiAdapter {
                         .zip(contexts)
                         .map(|((_ctx, val), og_ctx)| (og_ctx, val)),
                 )
+            }
+            "fs" => {
+                let contexts = contexts.collect::<Vec<_>>();
+
+                let properties = self.filesystem.resolve_coercion(
+                    Box::new(
+                        contexts
+                            .clone()
+                            .into_iter()
+                            .map(|v| v.flat_map(&mut |v: V| v.into_vertex())),
+                    ),
+                    type_name,
+                    &Arc::from(coerce_to_type),
+                    resolve_info,
+                );
+
+                let type_name = type_name.clone();
+                let coerce_to_type = coerce_to_type.to_string();
+                Box::new(properties.into_iter().zip(contexts).map(
+                    move |((_ctx, allowed), og_ctx)| {
+                        trace!(?allowed, ?type_name, ?coerce_to_type, "Allowed coercion?");
+                        (og_ctx, allowed)
+                    },
+                ))
             }
             _ => unreachable!(),
         }
@@ -454,7 +595,7 @@ impl<'a> Adapter<'a> for PlaixtAdapter {
     fn resolve_neighbors<V: trustfall::provider::AsVertex<Self::Vertex> + 'a>(
         &self,
         contexts: trustfall::provider::ContextIterator<'a, V>,
-        _type_name: &Arc<str>,
+        type_name: &Arc<str>,
         edge_name: &Arc<str>,
         _parameters: &trustfall::provider::EdgeParameters,
         _resolve_info: &trustfall::provider::ResolveEdgeInfo,
@@ -463,6 +604,7 @@ impl<'a> Adapter<'a> for PlaixtAdapter {
         V,
         trustfall::provider::VertexIterator<'a, Self::Vertex>,
     > {
+        trace!(?type_name, ?edge_name, "Resolving neighbors");
         match edge_name.as_ref() {
             "fields" => resolve_neighbors_with(contexts, |c| {
                 Box::new(
@@ -474,7 +616,8 @@ impl<'a> Adapter<'a> for PlaixtAdapter {
                         .into_iter(),
                 )
             }),
-            _ => unreachable!(),
+            _ => resolve_neighbors_with(contexts, |c| todo!()),
+            _ => unreachable!("Could not resolve {edge_name}"),
         }
     }
 
