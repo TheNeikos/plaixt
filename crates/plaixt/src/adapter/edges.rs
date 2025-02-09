@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use camino::Utf8PathBuf;
 use trustfall::provider::resolve_neighbors_with;
 use trustfall::provider::AsVertex;
 use trustfall::provider::ContextIterator;
@@ -11,6 +12,7 @@ use trustfall::provider::VertexIterator;
 
 use super::Vertex;
 use crate::parsing::DefinitionKind;
+use crate::parsing::Record;
 
 pub(super) fn resolve_directory_edge<'a, V: AsVertex<Vertex> + 'a>(
     contexts: ContextIterator<'a, V>,
@@ -76,10 +78,19 @@ pub(super) fn resolve_record_edge<'a, V: AsVertex<Vertex> + 'a>(
         let def = &definitions[&rec.kind][edge_name.as_ref()];
 
         match def {
-            DefinitionKind::Path => Box::new(std::iter::once(Vertex::Path(
-                rec.fields[edge_name.as_ref()].as_string().unwrap().into(),
-            ))),
+            DefinitionKind::Path => Box::new(std::iter::once(path_from_rec(rec, &edge_name))),
             _ => unreachable!("Only `Path` can appear as edge for now"),
         }
     })
+}
+
+fn path_from_rec(rec: &Record, edge_name: &str) -> Vertex {
+    let pathb = Utf8PathBuf::from(rec.fields[edge_name].as_string().unwrap());
+    if pathb.is_file() {
+        Vertex::File(pathb)
+    } else if pathb.is_dir() {
+        Vertex::Directory(pathb)
+    } else {
+        Vertex::Path(pathb)
+    }
 }

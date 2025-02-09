@@ -1,12 +1,12 @@
 {
-    Plaixt__RecordsAll {
-        ... on Plaixt__file_test {
-            at @output
-            kind @output
-            fields {
-                path {
-                    ... on fs__File {
-                        size @output
+    Records {
+        ... on p_file_test {
+            _at @output
+            _kind @output
+            path {
+                ... on Directory {
+                    Children @recurse(depth: 10) {
+                        path @output
                     }
                 }
             }

@@ -25,3 +25,7 @@ changelog "2025-02-07" {
 file_test "2025-02-08" {
 	path "Cargo.toml"
 }
+
+file_test "2025-02-08" {
+	path "/etc"
+}

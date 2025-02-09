@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::sync::OnceLock;
 
 use paperless_rs::PaperlessClient;
+use tracing::debug;
 use trustfall::provider::resolve_coercion_using_schema;
 use trustfall::provider::resolve_property_with;
 use trustfall::provider::AsVertex;
@@ -91,24 +92,18 @@ impl<'a> trustfall::provider::Adapter<'a> for Adapter {
         if property_name.as_ref() == "__typename" {
             return resolve_property_with(contexts, |vertex| vertex.typename().into());
         }
+
+        debug!(?type_name, ?property_name, "Resolving property");
+
         match type_name.as_ref() {
             "PaperlessDocument" => super::properties::resolve_paperless_document_property(
                 contexts,
                 property_name.as_ref(),
                 resolve_info,
             ),
-            "Path" => super::properties::resolve_path_property(
+            "Path" | "File" | "Directory" => super::properties::resolve_fs_property(
                 contexts,
-                property_name.as_ref(),
-                resolve_info,
-            ),
-            "File" => super::properties::resolve_file_property(
-                contexts,
-                property_name.as_ref(),
-                resolve_info,
-            ),
-            "Directory" => super::properties::resolve_directory_property(
-                contexts,
+                type_name.as_ref(),
                 property_name.as_ref(),
                 resolve_info,
             ),
@@ -159,12 +154,13 @@ impl<'a> trustfall::provider::Adapter<'a> for Adapter {
     fn resolve_coercion<V: AsVertex<Self::Vertex> + 'a>(
         &self,
         contexts: ContextIterator<'a, V>,
-        _type_name: &Arc<str>,
+        type_name: &Arc<str>,
         coerce_to_type: &Arc<str>,
         _resolve_info: &ResolveInfo,
     ) -> ContextOutcomeIterator<'a, V, bool> {
         let schema = self.schema.clone();
         let coerce_to_type = coerce_to_type.clone();
+        debug!(?coerce_to_type, ?type_name, "Trying to coerce");
 
         Box::new(contexts.map(move |ctx| {
             let subtypes: BTreeSet<_> = schema
@@ -176,8 +172,15 @@ impl<'a> trustfall::provider::Adapter<'a> for Adapter {
                 None => (ctx, false),
                 Some(vertex) => {
                     let typename = vertex.typename();
-                    let can_coerce = subtypes.contains(typename);
-                    (ctx, can_coerce)
+                    debug!(?coerce_to_type, ?vertex, "Trying to coerce");
+                    if let Some(rec) = vertex.as_record() {
+                        let is_rec = coerce_to_type.starts_with("p_");
+                        let is_kind = rec.kind == coerce_to_type.as_ref()[2..];
+                        (ctx, is_rec && is_kind)
+                    } else {
+                        let can_coerce = subtypes.contains(typename);
+                        (ctx, can_coerce)
+                    }
                 }
             }
         }))

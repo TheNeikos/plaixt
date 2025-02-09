@@ -1,8 +1,6 @@
-use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use kdl::KdlValue;
-use paperless_rs::PaperlessClient;
 use trustfall::provider::field_property;
 use trustfall::provider::resolve_property_with;
 use trustfall::provider::AsVertex;
@@ -13,26 +11,49 @@ use trustfall::FieldValue;
 
 use super::vertex::Vertex;
 
+pub(super) fn resolve_fs_property<'a, V: AsVertex<Vertex> + 'a>(
+    contexts: ContextIterator<'a, V>,
+    type_name: &str,
+    property_name: &str,
+    resolve_info: &ResolveInfo,
+) -> ContextOutcomeIterator<'a, V, FieldValue> {
+    match (type_name, property_name) {
+        (_, "exists" | "basename" | "path") => {
+            resolve_path_property(contexts, property_name, resolve_info)
+        }
+        ("Directory", _) => resolve_directory_property(contexts, property_name, resolve_info),
+        ("File", _) => resolve_file_property(contexts, property_name, resolve_info),
+        _ => {
+            unreachable!(
+                "attempted to read unexpected property '{property_name}' on type '{type_name}'"
+            )
+        }
+    }
+}
+
 pub(super) fn resolve_path_property<'a, V: AsVertex<Vertex> + 'a>(
     contexts: ContextIterator<'a, V>,
     property_name: &str,
     _resolve_info: &ResolveInfo,
 ) -> ContextOutcomeIterator<'a, V, FieldValue> {
     match property_name {
-        "exists" => resolve_property_with(contexts, move |v: &Vertex| {
-            let path = v.as_path().expect("vertex was not a Path");
-
-            path.exists().into()
+        "exists" => resolve_property_with(contexts, move |v: &Vertex| match v {
+            Vertex::Path(p) | Vertex::File(p) | Vertex::Directory(p) => p.exists().into(),
+            _ => {
+                panic!("Vertex was not a filesystem type")
+            }
         }),
-        "basename" => resolve_property_with(contexts, move |v: &Vertex| {
-            let path = v.as_path().expect("vertex was not a Path");
-
-            path.file_name().into()
+        "basename" => resolve_property_with(contexts, move |v: &Vertex| match v {
+            Vertex::Path(p) | Vertex::File(p) | Vertex::Directory(p) => p.file_name().into(),
+            _ => {
+                panic!("Vertex was not a filesystem type")
+            }
         }),
-        "path" => resolve_property_with(contexts, move |v: &Vertex| {
-            let path = v.as_path().expect("vertex was not a Path");
-
-            path.to_string().into()
+        "path" => resolve_property_with(contexts, move |v: &Vertex| match v {
+            Vertex::Path(p) | Vertex::File(p) | Vertex::Directory(p) => p.to_string().into(),
+            _ => {
+                panic!("Vertex was not a filesystem type")
+            }
         }),
         _ => {
             unreachable!("attempted to read unexpected property '{property_name}' on type 'Path'")
