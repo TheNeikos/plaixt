@@ -8,7 +8,6 @@ use camino::Utf8PathBuf;
 use clap::Parser;
 use clap::Subcommand;
 use clap::ValueHint;
-use filesystem_trustfall_adapter::FileSystemAdapter;
 use human_panic::Metadata;
 use miette::IntoDiagnostic;
 use parsing::Definition;
@@ -18,9 +17,9 @@ use tracing_subscriber::EnvFilter;
 use trustfall::execute_query;
 use trustfall::FieldValue;
 
+mod adapter;
 mod config;
 mod parsing;
-mod trustfall_plaixt;
 
 #[derive(Debug, Parser)]
 struct Args {
@@ -97,14 +96,19 @@ async fn main() -> miette::Result<()> {
 fn get_schema_and_adapter(
     definitions: &BTreeMap<String, Vec<Definition>>,
     records: Vec<Record>,
-) -> (trustfall::Schema, trustfall_plaixt::TrustfallMultiAdapter) {
-    let schema = trustfall_plaixt::to_schema(definitions);
-    let adapter = trustfall_plaixt::TrustfallMultiAdapter {
-        plaixt: trustfall_plaixt::PlaixtAdapter {
-            records: records.clone(),
-        },
-        filesystem: FileSystemAdapter::new(),
-    };
+) -> (trustfall::Schema, adapter::Adapter) {
+    let schema = adapter::to_schema(definitions);
+    let definitions = definitions
+        .iter()
+        .map(|(name, def)| (name.clone(), def.last().cloned().unwrap().fields))
+        .collect();
+    let adapter = adapter::Adapter::new(
+        schema.clone(),
+        records,
+        definitions,
+        None,
+        tokio::runtime::Handle::current(),
+    );
     (schema, adapter)
 }
 

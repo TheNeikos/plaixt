@@ -1,5 +1,4 @@
 use std::collections::BTreeMap;
-use std::collections::HashMap;
 
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
@@ -14,8 +13,6 @@ use miette::LabeledSpan;
 use miette::NamedSource;
 use owo_colors::OwoColorize;
 use tokio_stream::wrappers::ReadDirStream;
-
-use crate::trustfall_plaixt::ADAPTER_SEP;
 
 #[derive(Debug, Clone)]
 pub struct Record {
@@ -155,7 +152,7 @@ pub(crate) async fn load_records(
     Ok(defs)
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum DefinitionKind {
     String,
     Path,
@@ -163,11 +160,11 @@ pub enum DefinitionKind {
 }
 
 impl DefinitionKind {
-    pub(crate) fn trustfall_kind(&self) -> String {
+    pub(crate) fn trustfall_kind(&self, _namespace: &str) -> String {
         match self {
-            DefinitionKind::String => String::from("String"),
-            DefinitionKind::Path => format!("fs{ADAPTER_SEP}Path"),
-            DefinitionKind::OneOf(_vecs) => String::from("String"),
+            DefinitionKind::String => String::from("String!"),
+            DefinitionKind::Path => String::from("Path!"),
+            DefinitionKind::OneOf(_vecs) => String::from("String!"),
         }
     }
 
@@ -188,6 +185,23 @@ impl DefinitionKind {
                 .ok_or_else(|| format!("Expected one of: {}", options.join(", "))),
         }
     }
+
+    pub(crate) fn extra_trustfall_kinds(
+        &self,
+        namespace: &str,
+    ) -> Vec<crate::adapter::CustomVertex> {
+        match self {
+            DefinitionKind::OneOf(defs) => {
+                let name = format!("{namespace}Def");
+                let vec = vec![crate::adapter::CustomVertex {
+                    definition: format!("enum {name} {{ {} }}", defs.join(",")),
+                    name,
+                }];
+                vec
+            }
+            _ => vec![],
+        }
+    }
 }
 
 impl TryFrom<&str> for DefinitionKind {
@@ -201,11 +215,11 @@ impl TryFrom<&str> for DefinitionKind {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Definition {
     pub(crate) name: String,
     pub(crate) since: Timestamp,
-    pub(crate) fields: HashMap<String, DefinitionKind>,
+    pub(crate) fields: BTreeMap<String, DefinitionKind>,
 }
 
 pub(crate) fn parse_definition(
